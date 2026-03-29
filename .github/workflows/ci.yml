@@ -1,0 +1,85 @@
+name: CI-Build
+
+env:
+  DOCKER_IMAGE: ralfueberfuhr/recipes-frontend
+
+on:
+  push:
+    branches:
+      - "main"
+  pull_request:
+
+# Required GitHub Secrets for Docker Hub push:
+#   DOCKERHUB_USERNAME - Docker Hub username
+#   DOCKERHUB_TOKEN    - Docker Hub Personal Access Token (PAT)
+#                        (must have read/write/delete scope for pushrm to update the description)
+
+defaults:
+  run:
+    working-directory: recipes-app
+
+jobs:
+  build-app:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: recipes-app/package-lock.json
+      - name: Install dependencies
+        run: npm ci
+      - name: Build Angular app
+        run: npm run build
+      - name: Upload build artifacts
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@v4
+        with:
+          name: angular-dist
+          path: recipes-app/dist/recipes-app/browser/
+
+  build-image:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: build-app
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Extract version from package.json
+        id: version
+        run: echo "VERSION=$(node -p "require('./package.json').version")" >> $GITHUB_OUTPUT
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: angular-dist
+          path: recipes-app/dist/recipes-app/browser/
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: recipes-app
+          file: recipes-app/docker/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ${{ env.DOCKER_IMAGE }}:latest
+            ${{ env.DOCKER_IMAGE }}:${{ steps.version.outputs.VERSION }}
+      - name: Update Docker Hub description
+        uses: christian-korneck/update-container-description-action@v1
+        env:
+          DOCKER_USER: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKER_PASS: ${{ secrets.DOCKERHUB_TOKEN }}
+        with:
+          destination_container_repo: ${{ env.DOCKER_IMAGE }}
+          provider: dockerhub
+          short_description: "A web frontend to manage recipes"
+          readme_file: recipes-app/docker/README.md
