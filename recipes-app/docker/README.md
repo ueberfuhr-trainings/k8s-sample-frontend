@@ -17,11 +17,11 @@ substitutes them into the runtime configuration at container startup.
 |----------------------|--------------------------------|--------------------------|
 | `API_BASE_URL`       | URL of the Recipes Backend API | `http://localhost:3000`  |
 
-### Example
+To run the container locally with a local backend, use:
 
 ```bash
 docker run -i --rm \
   -p 4200:8080 \
-  -e API_BASE_URL=http://backend:8080 \
+  -e API_BASE_URL=http://localhost:8080 \
   ralfueberfuhr/recipes-frontend:latest
 ```
