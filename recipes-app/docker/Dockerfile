@@ -16,7 +16,9 @@ COPY docker/resources/config.template.json /config.template.json
 COPY --chmod=755 docker/resources/entrypoint.sh /entrypoint.sh
 
 # Schreibrechte für User 101, damit entrypoint.sh config.json schreiben kann
+USER root
 RUN chmod g+w /usr/share/nginx/html
+USER 101
 
 ENTRYPOINT ["/entrypoint.sh"]
 CMD ["nginx", "-g", "daemon off;"]
